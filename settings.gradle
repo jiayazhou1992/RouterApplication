@@ -1,0 +1,1 @@
+include ':app', ':RouterAnnotation', ':RouterProcessor', ':javaDemo'
