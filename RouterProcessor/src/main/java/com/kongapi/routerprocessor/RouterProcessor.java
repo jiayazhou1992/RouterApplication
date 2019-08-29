@@ -1,6 +1,7 @@
 package com.kongapi.routerprocessor;
 
 import com.google.auto.service.AutoService;
+import com.kongapi.routerannotation.Module;
 import com.kongapi.routerannotation.PagePath;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
@@ -8,13 +9,10 @@ import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,12 +29,14 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 @AutoService(Processor.class)
 public class RouterProcessor extends AbstractProcessor {
 
     String packageName;
+    String roterFileName = "RouterHelp";
     // 元素操作的辅助类
     Messager messager;
     Elements elementUtils;
@@ -53,13 +53,24 @@ public class RouterProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        
+        // 获得被该注解声明的元素
+        Set<? extends Element> moduleMlements = roundEnv.getElementsAnnotatedWith(Module.class);
+        if (moduleMlements != null && moduleMlements.size() > 0) {
+            Element element = moduleMlements.iterator().next();
+            if (element.getKind() == ElementKind.CLASS) {
+                TypeElement classElement = (TypeElement) element;
+                String classSimpleName = classElement.getSimpleName().toString();
+                packageName = classElement.getAnnotation(Module.class).packageName() + ".router";
+                roterFileName = classSimpleName + roterFileName;
+            }
+        }
+
         MethodSpec.Builder getFragmentBuilder = MethodSpec.methodBuilder("getFragment")
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                .returns(TypeName.OBJECT)
-                //.returns(ClassName.get("com.kongapi.commonlibrary.base", "BaseFragment", new String[0]))
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .returns(ClassName.get("com.kongapi.commonlibrary.base", "BaseFragment", new String[0]))
                 .addParameter(String.class, "page_path")
-                .addStatement("Object fragment = null")
+                .addStatement("BaseFragment fragment = null")
                 .addCode("switch (page_path){\n");
 
         // 获得被该注解声明的元素
@@ -77,7 +88,7 @@ public class RouterProcessor extends AbstractProcessor {
                         .addStatement("break");
                 if (packageName == null) {
                     String[] strings = className.split("\\.");
-                    packageName = (strings[0] + "." + strings[1] + "." + strings[2]);
+                    packageName = (strings[0] + "." + strings[1] + "." + strings[2] + ".router");
                 }
             }
         }
@@ -86,7 +97,8 @@ public class RouterProcessor extends AbstractProcessor {
                 .addStatement("return fragment");
         MethodSpec methodSpec = getFragmentBuilder.build();
 
-        TypeSpec RouterHelp = TypeSpec.classBuilder("RouterHelp")
+        TypeSpec RouterHelp = TypeSpec.classBuilder(roterFileName)
+                .addSuperinterface(ClassName.get("com.kongapi.commonlibrary.ui.router", "RouterHelpInterface", new String[0]))
                 .addModifiers(Modifier.PUBLIC)
                 .addMethod(methodSpec)
                 .build();
@@ -107,6 +119,7 @@ public class RouterProcessor extends AbstractProcessor {
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> annotataions = new LinkedHashSet<>();
         annotataions.add(PagePath.class.getCanonicalName());
+        annotataions.add(Module.class.getCanonicalName());
         return annotataions;
     }
 
